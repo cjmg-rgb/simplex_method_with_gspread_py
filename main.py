@@ -3,6 +3,7 @@ import re
 import string
 
 from google.oauth2.service_account import Credentials
+from gspread_formatting import *
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
@@ -17,8 +18,10 @@ class Table:
         self.title = title
         self.constraints = constraints
 
+        # To keep track on how many slacks were added
         self.added_zeros = 0
 
+        # To keep track of the original count of Cjs
         self.cj_count = len(cj)
         self.cj = ["", "", "Cj"]
 
@@ -26,13 +29,18 @@ class Table:
         for i in range(len(cj)):
             self.cj.append(str(cj[i]))
 
-        # Create the addition slacks
+        # Create the additional slacks
         for _ in range(len(constraints)):
             self.cj.append("0")
             self.added_zeros += 1
 
+        # The total row or constraints tin the table
         self.row_count = len(self.cj) - len(cj) - 3
 
+        # For designing purposes
+        self.cj_row = workbook.sheet1.find("Cj").row
+        self.cj_zj_row = workbook.sheet1.find("Cj - Zj").row
+        self.solution_row = workbook.sheet1.find("SOLUTION").row
 
     def create_column_names(self):
         # Create Column Names
@@ -54,8 +62,6 @@ class Table:
 
             for j in range(self.row_count):
                 row.append(f"{'1' if i == j else '0'}")
-
-            # print(self.constraints[i][len(self.constraints[i]) - 1])
 
             row.append(self.constraints[i][len(self.constraints[i]) - 1])
 
@@ -82,7 +88,46 @@ class Table:
             total = int(cj_list[i]) - int(zj_list[i])
             cj_zj_list.append(total)
 
+        cj_zj_list.append("")
+        cj_zj_list.append("END")
+
         return cj_zj_list
+
+
+    def styling(self):
+
+
+
+        wk = workbook.sheet1
+
+        table_row_start = wk.find(self.title).row
+        table_col_end, table_row_end = wk.find("RATIO").col, wk.find("RATIO").row
+        cv_row = wk.find("CV").row
+
+        # Convert column number into alphabet
+        columns = string.ascii_uppercase
+        table_end_column = columns[table_col_end - 1]
+
+        main_bg = (0.9764705882352941, 0.796078431372549, 0.611764705882353)
+
+        general_format = CellFormat(
+            textFormat=TextFormat(fontSize=13),
+            horizontalAlignment="CENTER"
+        )
+
+        fmt = CellFormat(
+            backgroundColor=Color(main_bg[0], main_bg[1], main_bg[2]),
+            textFormat=TextFormat(bold=True, foregroundColor=Color(0, 0, 0), fontSize=13),
+            horizontalAlignment="CENTER"
+        )
+
+
+        format_cell_ranges(wk, [
+            (f'B{cv_row}:J{cv_row}', fmt),
+            (f'C{self.cj_row}:C{self.cj_zj_row}', fmt),
+            (f"A{table_row_start}:{table_end_column}:{table_row_end}", general_format),
+            (f"I{self.solution_row + self.added_zeros + 1}", fmt)
+        ])
 
     def draw(self):
 
@@ -115,6 +160,10 @@ class Table:
         drawing.append(cj_zj)
 
         workbook.sheet1.update("A1", drawing)
+        self.styling()
+
+
+
 
 
 cj = [3, 5]
